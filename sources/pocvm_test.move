@@ -6,7 +6,7 @@ module pocvm::vm_tests {
     use std::string;
 
     use aptos_framework::coin;
-    use aptos_framework::aptos_coin::{AptosCoin, initialize_for_test};
+    use aptos_framework::aptos_coin::{Self, AptosCoin};
 
     use pocvm::vm;
 
@@ -79,7 +79,7 @@ module pocvm::vm_tests {
         let addr = signer::address_of(&user);
 
         // mint coin
-        let (burn_cap, mint_cap) = initialize_for_test(&core_framework);
+        let (burn_cap, mint_cap) = aptos_coin::initialize_for_test(&core_framework);
         coin::register<AptosCoin>(&user);
         coin::deposit(addr, coin::mint(1000, &mint_cap));
 
