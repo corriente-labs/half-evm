@@ -2,6 +2,7 @@ module pocvm::vm {
     use std::error;
     use std::signer;
     use std::string;
+
     use aptos_framework::account;
     use aptos_framework::coin;
     use aptos_framework::aptos_coin::{AptosCoin};
@@ -41,8 +42,8 @@ module pocvm::vm {
         signer::address_of(&resource_signer)
     }
 
-    public entry fun register(vm_id: address, addr: signer, e_addr: u128) acquires State {
-        let account_addr = signer::address_of(&addr);
+    public entry fun register(vm_id: address, acct: &signer, e_addr: u128) acquires State {
+        let account_addr = signer::address_of(acct);
         let state = borrow_global_mut<State>(vm_id);
         
         let a2e = &mut state.a2e;
@@ -62,10 +63,11 @@ module pocvm::vm {
         let state = borrow_global<State>(vm_id);
 
         let a2e = &state.a2e;
-        assert!(table::contains(a2e, addr), error::already_exists(ACCOUNT_NOT_FOUND));
-        let e_addr = table::borrow(a2e, addr);
+        assert!(table::contains(a2e, addr), error::not_found(ACCOUNT_NOT_FOUND));
 
+        let e_addr = table::borrow(a2e, addr);
         let acct = table::borrow(&state.accounts, *e_addr);
+
         if(table::contains(&acct.state, slot)) {
             *table::borrow(&acct.state, slot)
         } else {
@@ -78,6 +80,7 @@ module pocvm::vm {
 
         let a2e = &mut state.a2e;
         assert!(table::contains(a2e, addr), error::not_found(ACCOUNT_NOT_FOUND));
+
         let e_addr = table::borrow(a2e, addr);
         let acct = table::borrow_mut(&mut state.accounts, *e_addr);
         
@@ -87,6 +90,18 @@ module pocvm::vm {
         } else {
             table::add(&mut acct.state, slot, val);
         }
+    }
+
+    public entry fun balance(vm_id: address, addr: address): u64 acquires State {
+        let state = borrow_global<State>(vm_id);
+
+        let a2e = &state.a2e;
+        assert!(table::contains(a2e, addr), error::not_found(ACCOUNT_NOT_FOUND));
+
+        let e_addr = table::borrow(a2e, addr);
+        let acct = table::borrow(&state.accounts, *e_addr);
+
+        return acct.balance
     }
 
     public entry fun opt_in(vm_id: address, from: &signer, val: u64) acquires State {

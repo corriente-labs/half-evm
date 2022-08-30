@@ -5,6 +5,9 @@ module pocvm::vm_tests {
     use std::vector;
     use std::string;
 
+    use aptos_framework::coin;
+    use aptos_framework::aptos_coin::{AptosCoin, initialize_for_test};
+
     use pocvm::vm;
 
     fun get_account(): signer {
@@ -38,7 +41,7 @@ module pocvm::vm_tests {
         let vm_id = vm::init(vm_deployer, x"0011223344ff");
 
         let e_addr = 1234u128;
-        vm::register(vm_id, account, e_addr);
+        vm::register(vm_id, &account, e_addr);
 
         assert!(
             vm::read(vm_id, addr, 0) == 0,
@@ -69,5 +72,32 @@ module pocvm::vm_tests {
             vm::read(vm_id, addr, 2) == 22,
             0
         );
+    }
+
+    #[test(user = @0x1111, core_framework = @aptos_framework)]
+    public entry fun optin_and_read(user: signer, core_framework: signer) {
+        let addr = signer::address_of(&user);
+
+        // mint coin
+        let (burn_cap, mint_cap) = initialize_for_test(&core_framework);
+        coin::register<AptosCoin>(&user);
+        coin::deposit(addr, coin::mint(1000, &mint_cap));
+
+        let vm_deployer = deployer();
+        let vm_id = vm::init(vm_deployer, x"0011223344ff");
+
+        let e_addr = 1234u128;
+        vm::register(vm_id, &user, e_addr);
+
+        // withdraw from account and deposit to vm
+        vm::opt_in(vm_id, &user, 123);
+
+        assert!(
+            vm::balance(vm_id, addr) == 123,
+            0
+        );
+
+        coin::destroy_mint_cap<AptosCoin>(mint_cap);
+        coin::destroy_burn_cap<AptosCoin>(burn_cap);
     }
 }
