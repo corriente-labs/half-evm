@@ -29,7 +29,7 @@ aptos move init --name poc-vm
 ```
 In `Move.toml`, 
 1. Change git link of dependency.AptosFramework to `https://github.com/aptos-labs/aptos-core.git`.
-2. Change rev to the latest commit hash of `devnet` branch. (If you build cli with different release branch, use same branch.)
+2. Change rev to the build commit hash obtained by `aptos info` command.
 
 ### Compile
 ```
