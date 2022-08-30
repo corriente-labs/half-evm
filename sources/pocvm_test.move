@@ -35,8 +35,7 @@ module pocvm::message_tests {
         aptos_framework::account::create_account_for_test(addr);
 
         let vm_deployer = deployer();
-        let vm_id = signer::address_of(&vm_deployer);
-        message::init(vm_deployer);
+        let vm_id = message::init(vm_deployer, x"0011223344ff");
 
         let e_addr = 1234u128;
         message::register(vm_id, account, e_addr);

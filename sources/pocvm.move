@@ -3,32 +3,42 @@ module pocvm::message {
     use std::signer;
     use std::string;
     use aptos_framework::account;
+    use aptos_framework::coin;
+    use aptos_framework::aptos_coin::{AptosCoin};
     use aptos_std::event;
     use aptos_std::table::{Self, Table};
 
     struct State has key {
+        signer_capability: account::SignerCapability,
         a2e: Table<address, u128>,
         accounts: Table<u128, Account>,
     }
 
     struct Account has store {
-        balance: u128,
-        state: Table<u128, u128>
+        balance: u64,
+        state: Table<u128, u128>,
     }
 
     const STATE_ALREADY_EXISTS: u64 = 0;
     const ACCOUNT_ALREADY_EXISTS: u64 = 1;
 
     const ACCOUNT_NOT_FOUND: u64 = 2;
+    const INSUFFICIENT_BALANCE: u64 = 3;
 
-    public entry fun init(acct: signer) {
+    // init resource account and vm state
+    public entry fun init(acct: signer, seed: vector<u8>): address {
         let account_addr = signer::address_of(&acct);
         assert!(!exists<State>(account_addr), error::already_exists(STATE_ALREADY_EXISTS));
 
-        move_to<State>(&acct, State {
+        let (resource_signer, resource_signer_cap) = account::create_resource_account(&acct, seed);
+
+        move_to<State>(&resource_signer, State {
+            signer_capability: resource_signer_cap,
             a2e: table::new<address, u128>(),
             accounts: table::new<u128, Account>(),
         });
+
+        signer::address_of(&resource_signer)
     }
 
     public entry fun register(vm_id: address, addr: signer, e_addr: u128) acquires State {
@@ -67,7 +77,7 @@ module pocvm::message {
         let state = borrow_global_mut<State>(vm_id);
 
         let a2e = &mut state.a2e;
-        assert!(table::contains(a2e, addr), error::already_exists(ACCOUNT_NOT_FOUND));
+        assert!(table::contains(a2e, addr), error::not_found(ACCOUNT_NOT_FOUND));
         let e_addr = table::borrow(a2e, addr);
         let acct = table::borrow_mut(&mut state.accounts, *e_addr);
         
@@ -79,13 +89,39 @@ module pocvm::message {
         }
     }
 
-    // public entry fun deposit(addr: address) {
-    //     borrow_global<State>(vm_id, )
-    // }
+    public entry fun opt_in(vm_id: address, from: &signer, val: u64) acquires State {
+        let state = borrow_global_mut<State>(vm_id);
 
-    // public entry fun withdraw(acct: &signer) {
+        let addr = signer::address_of(from); // address opting-in
 
-    // }
+        let a2e = &mut state.a2e;
+        assert!(table::contains(a2e, addr), error::not_found(ACCOUNT_NOT_FOUND));
+        
+        let e_addr = table::borrow(a2e, addr);
+        let acct = table::borrow_mut(&mut state.accounts, *e_addr);
+        acct.balance = acct.balance + val; // opt-in
+
+        coin::transfer<AptosCoin>(from, vm_id, val); // transfer coin
+    }
+
+    public entry fun opt_out(vm_id: address, to: &signer, val: u64) acquires State {
+        let state = borrow_global_mut<State>(vm_id);
+
+        let addr = signer::address_of(to); // address opting-out
+
+        let a2e = &mut state.a2e;
+        assert!(table::contains(a2e, addr), error::not_found(ACCOUNT_NOT_FOUND));
+
+        let e_addr = table::borrow(a2e, addr);
+        let acct = table::borrow_mut(&mut state.accounts, *e_addr);
+        assert!(acct.balance >= val, error::invalid_state(INSUFFICIENT_BALANCE));
+
+        acct.balance = acct.balance - val; // opt-in
+
+        let from = &account::create_signer_with_capability(&state.signer_capability);
+
+        coin::transfer<AptosCoin>(from, addr, val); // transfer coin
+    }
 
 //:!:>resource
     struct MessageHolder has key {
