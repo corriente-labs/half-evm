@@ -1,4 +1,4 @@
-module pocvm::message {
+module pocvm::vm {
     use std::error;
     use std::signer;
     use std::string;
