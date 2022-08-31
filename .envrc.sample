@@ -1,0 +1,2 @@
+export PATH=$PATH:$HOME/repos/aptos-core/target/debug
+# export PATH=$PATH:$HOME/repos/aptos-core/target/release
