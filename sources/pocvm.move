@@ -32,6 +32,7 @@ module pocvm::vm {
         assert!(!exists<State>(account_addr), error::already_exists(STATE_ALREADY_EXISTS));
 
         let (resource_signer, resource_signer_cap) = account::create_resource_account(&acct, seed);
+        coin::register<AptosCoin>(&resource_signer);
 
         move_to<State>(&resource_signer, State {
             signer_capability: resource_signer_cap,
@@ -39,7 +40,8 @@ module pocvm::vm {
             accounts: table::new<u128, Account>(),
         });
 
-        signer::address_of(&resource_signer)
+        let vm_id = signer::address_of(&resource_signer);
+        vm_id
     }
 
     public entry fun register(vm_id: address, acct: &signer, e_addr: u128) acquires State {

@@ -7,6 +7,7 @@ module pocvm::vm_tests {
 
     use aptos_framework::coin;
     use aptos_framework::aptos_coin::{Self, AptosCoin};
+    use aptos_framework::aptos_account;
 
     use pocvm::vm;
 
@@ -80,8 +81,15 @@ module pocvm::vm_tests {
 
         // mint coin
         let (burn_cap, mint_cap) = aptos_coin::initialize_for_test(&core_framework);
-        coin::register<AptosCoin>(&user);
+
+        aptos_account::create_account(addr);
         coin::deposit(addr, coin::mint(1000, &mint_cap));
+
+        // assert minted balance
+        assert!(
+            coin::balance<AptosCoin>(addr) == 1000,
+            0
+        );
 
         let vm_deployer = deployer();
         let vm_id = vm::init(vm_deployer, x"0011223344ff");
@@ -89,11 +97,29 @@ module pocvm::vm_tests {
         let e_addr = 1234u128;
         vm::register(vm_id, &user, e_addr);
 
-        // withdraw from account and deposit to vm
+        // deposit to vm
         vm::opt_in(vm_id, &user, 123);
 
+        // assert balance after opt-in
+        assert!(
+            coin::balance<AptosCoin>(addr) == 877,
+            0
+        );
         assert!(
             vm::balance(vm_id, addr) == 123,
+            0
+        );
+
+        // withdraw from vm
+        vm::opt_out(vm_id, &user, 100);
+
+        // assert balance after opt-out
+        assert!(
+            coin::balance<AptosCoin>(addr) == 977,
+            0
+        );
+        assert!(
+            vm::balance(vm_id, addr) == 23,
             0
         );
 
