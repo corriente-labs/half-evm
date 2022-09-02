@@ -8,6 +8,8 @@ module pocvm::vm {
     use aptos_framework::aptos_coin::{AptosCoin};
     use aptos_std::table::{Self, Table};
 
+    const WORDSIZE_BYTE: u8 = 16; // 128 bit
+
     const STATE_ALREADY_EXISTS: u64 = 0;
     const ACCOUNT_ALREADY_EXISTS: u64 = 1;
 
@@ -15,6 +17,7 @@ module pocvm::vm {
     const INSUFFICIENT_BALANCE: u64 = 3;
 
     const VM_CALL_DEPTH_OVERFLOW: u64 = 1000;
+    const VM_INSUFFICIENT_BALANCE: u64 = 1001;
 
     struct Message has copy, drop {
         origin: u128,
@@ -141,34 +144,40 @@ module pocvm::vm {
 
         let caller_acct = table::borrow_mut(&mut state.accounts, message.caller);
         caller_acct.balance = caller_acct.balance - message.value;
+        let called_code = caller_acct.code;
 
-        let callee_acct = table::borrow_mut(&mut state.accounts, message.to);
+        // let callee_acct = table::borrow(&state.accounts, message.to);
 
         let stack = vector::empty<u128>();
         let memory = vector::empty<u8>();
         let ret_data = vector::empty<u8>();
         let depth = 0;
 
-        run(message.caller, callee_acct, &message.data, &mut stack, &mut memory, &mut ret_data, &mut depth);
-
-        return vector::empty()
+        return run(state,
+            message.caller, message.to,
+            &called_code,
+            &message.data, &mut stack, &mut memory, &mut ret_data,
+            &mut depth
+        )
     }
 
     fun run(
+        state: &mut State,
         caller_addr: u128,
-        callee: &mut Account,
+        callee_addr: u128,
+        code: &vector<u8>,
         calldata: &vector<u8>,
         stack: &mut vector<u128>,
         memory: &mut vector<u8>,
         ret_data: &mut vector<u8>,
-        depth: &mut u64)
+        depth: &mut u64): vector<u8>
     {
         let pc: u64 = 0;
 
         assert!(*depth < 1024, VM_CALL_DEPTH_OVERFLOW);
 
-        while(pc < vector::length<u8>(&callee.code)) {
-            let op = *vector::borrow<u8>(&callee.code, pc);
+        while(pc < vector::length<u8>(code)) {
+            let op = *vector::borrow<u8>(code, pc);
             
             // stop
             if (op == 0x00) {
@@ -226,7 +235,7 @@ module pocvm::vm {
                 let value = 0u128;
                 let count = 0;
                 while(index > pc) {
-                    let byte = *vector::borrow<u8>(&callee.code, index);
+                    let byte = *vector::borrow<u8>(code, index);
                     value = value + ((byte as u128)<<(8*count));
                     index = index - 1;
                     count = count + 1;
@@ -305,12 +314,18 @@ module pocvm::vm {
             
             // mload
             if (op == 0x51) {
+                let offset = vector::pop_back<u128>(stack);
+                let val = mload(memory, (offset as u64));
+                vector::push_back<u128>(stack, val);
                 pc = pc + 1;
                 continue
             };
 
             // mstore
             if (op == 0x52) {
+                let offset = vector::pop_back<u128>(stack);
+                let val = vector::pop_back<u128>(stack);
+                mstore(memory, (offset as u64), val);
                 pc = pc + 1;
                 continue
             };
@@ -318,6 +333,7 @@ module pocvm::vm {
             // sload
             if (op == 0x54) {
                 let slot = vector::pop_back<u128>(stack);
+                let callee = table::borrow(&state.accounts, callee_addr);
                 let val = sload(callee, slot);
                 vector::push_back<u128>(stack, val);
                 pc = pc + 1;
@@ -328,6 +344,7 @@ module pocvm::vm {
             if (op == 0x55) {
                 let slot = vector::pop_back<u128>(stack);
                 let val = vector::pop_back<u128>(stack);
+                let callee = table::borrow_mut(&mut state.accounts, callee_addr);
                 sstore(callee, slot, val);
                 pc = pc + 1;
                 continue
@@ -368,6 +385,33 @@ module pocvm::vm {
 
             // call
             if (op == 0xf1) {
+                let _gas = vector::pop_back<u128>(stack); // ignored
+                let to = vector::pop_back<u128>(stack);
+                let value = (vector::pop_back<u128>(stack) as u64);
+                let args_offset = vector::pop_back<u128>(stack);
+                let args_size = vector::pop_back<u128>(stack);
+                let ret_offset = vector::pop_back<u128>(stack);
+                let ret_size = vector::pop_back<u128>(stack);
+
+                let next_caller = table::borrow_mut(&mut state.accounts, callee_addr);
+                assert!(next_caller.balance >= value, VM_INSUFFICIENT_BALANCE);
+                next_caller.balance = next_caller.balance - value;
+
+                let next_callee = table::borrow(& state.accounts, to);
+                let called_code = next_callee.code;
+
+                let next_calldata = mem_slice(memory, (args_offset as u64), (args_size as u64));
+
+                let ret = run(state,
+                    callee_addr, to,
+                    &called_code,
+                    &next_calldata, stack, memory, ret_data,
+                    depth
+                );
+
+                let ret_truncated = mem_slice(&mut ret, 0, (ret_size as u64));
+                mem_mut(memory, (ret_offset as u64), &ret_truncated);
+
                 pc = pc + 1;
                 continue
             };
@@ -386,6 +430,64 @@ module pocvm::vm {
                 pc = pc + 1;
             };
         };
+
+        return vector::empty()
+    }
+
+    fun mload(memory: &mut vector<u8>, offset: u64): u128 {
+        let spillover = offset + (WORDSIZE_BYTE as u64) - vector::length(memory);
+        while(spillover > 0) {
+            vector::push_back<u8>(memory, 0);
+            spillover = spillover - 1;
+        };
+
+        let sum: u128 = 0;
+        let index: u8 = 0;
+        while(index < WORDSIZE_BYTE) {
+            let byte = (*vector::borrow(memory, offset + (index as u64)) as u128) << (128 - index*8);
+            sum = sum + byte;
+            index = index + 1;
+        };
+        return sum
+    }
+    fun mstore(memory: &mut vector<u8>, offset: u64, val: u128) {
+        let spillover = offset + (WORDSIZE_BYTE as u64) - vector::length(memory);
+        while(spillover > 0) {
+            vector::push_back<u8>(memory, 0);
+            spillover = spillover - 1;
+        };
+
+        let index: u8 = 0;
+        while(index < WORDSIZE_BYTE) {
+            let src = (((val >> index*8) & 0xff) as u8);
+            let dst = vector::borrow_mut(memory, offset + ((WORDSIZE_BYTE - 1 - index) as u64));
+            *dst = src;
+            index = index + 1;
+        };
+    }
+    fun mem_slice(memory: &mut vector<u8>, offset: u64, size: u64): vector<u8> {
+        let spillover = offset + size - vector::length(memory);
+        while(spillover > 0) {
+            vector::push_back<u8>(memory, 0);
+            spillover = spillover - 1;
+        };
+
+        let index: u64 = 0;
+        let ret = vector::empty<u8>();
+        while(index < size) {
+            let src = vector::borrow(memory, offset + index);
+            vector::push_back(&mut ret, *src);
+            index = index + 1;
+        };
+        ret
+    }
+    fun mem_mut(dst: &mut vector<u8>, dst_offset: u64, src: &vector<u8>) {
+        let index = 0;
+        while(index < vector::length(src)) {
+            let dst_byte = vector::borrow_mut(dst, dst_offset + index);
+            *dst_byte = *vector::borrow(src, index);
+            index = index + 1;
+        };
     }
 
     fun sload(acct: &Account, slot: u128): u128 {
@@ -395,7 +497,6 @@ module pocvm::vm {
             0
         }
     }
-
     fun sstore(acct: &mut Account, slot: u128, val: u128) {
         if(table::contains(&acct.state, slot)) {    
             let v = table::borrow_mut(&mut acct.state, slot);
