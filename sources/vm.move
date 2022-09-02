@@ -150,7 +150,7 @@ module pocvm::vm {
 
         let stack = vector::empty<u128>();
         let memory = vector::empty<u8>();
-        let ret_data = vector::empty<u8>();
+        let ret_data = vector::empty<u8>(); // TODO: implement correctly
         let depth = 0;
 
         return run(state,
@@ -401,11 +401,16 @@ module pocvm::vm {
                 let called_code = next_callee.code;
 
                 let next_calldata = mem_slice(memory, (args_offset as u64), (args_size as u64));
+                let next_stack = vector::empty<u128>();
+                let next_memory = vector::empty<u8>();
+                let next_ret_data = vector::empty<u8>(); // TODO: implement correctly
+
+                *depth = *depth + 1;    // increment depth
 
                 let ret = run(state,
                     callee_addr, to,
                     &called_code,
-                    &next_calldata, stack, memory, ret_data,
+                    &next_calldata, &mut next_stack, &mut next_memory, &mut next_ret_data,
                     depth
                 );
 
@@ -418,16 +423,9 @@ module pocvm::vm {
 
             // return
             if (op == 0xf3) {
-                let ret = vector::empty<u8>();
-                let top = vector::pop_back<u128>(stack);
-                let count = 0;
-                while(count < 16) {
-                    let byte = (top>>(8 * count)) & 0xff;
-                    vector::push_back<u8>(&mut ret, (byte as u8));
-                    count = count + 1;
-                };
-                vector::reverse(&mut ret);
-                pc = pc + 1;
+                let offset = (vector::pop_back<u128>(stack) as u64);
+                let size = (vector::pop_back<u128>(stack) as u64);
+                return mem_slice(memory, offset, size)
             };
         };
 
