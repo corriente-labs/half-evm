@@ -8,6 +8,7 @@ module pocvm::vm {
     use aptos_framework::aptos_coin::{AptosCoin};
     use aptos_std::table::{Self, Table};
     use aptos_std::event;
+    use aptos_std::debug;
 
     const WORDSIZE_BYTE: u8 = 16; // 128 bit
 
@@ -97,18 +98,6 @@ module pocvm::vm {
         sload(acct, slot)
     }
 
-    #[test_only]
-    public fun pub_sstore(vm_id: address, addr: address, slot: u128, val: u128) acquires State {
-        let state = borrow_global_mut<State>(vm_id);
-
-        let a2e = &mut state.a2e;
-        assert!(table::contains(a2e, addr), error::not_found(ACCOUNT_NOT_FOUND));
-
-        let e_addr = table::borrow(a2e, addr);
-        let acct = table::borrow_mut(&mut state.accounts, *e_addr);
-        sstore(acct, slot, val);
-    }
-
     public fun pub_balance(vm_id: address, addr: address): u64 acquires State {
         let state = borrow_global<State>(vm_id);
 
@@ -186,6 +175,9 @@ module pocvm::vm {
 
         while(pc < vector::length<u8>(code)) {
             let op = *vector::borrow<u8>(code, pc);
+            // debug::print<vector<u128>>(stack);
+            // debug::print<vector<u8>>(memory);
+            // debug::print<u8>(&op);
             
             // stop
             if (op == 0x00) {
@@ -454,7 +446,8 @@ module pocvm::vm {
             if (op == 0xf3) {
                 let offset = (vector::pop_back<u128>(stack) as u64);
                 let size = (vector::pop_back<u128>(stack) as u64);
-                return mem_slice(memory, offset, size)
+                let ret = mem_slice(memory, offset, size);
+                return ret
             };
         };
 
@@ -471,7 +464,7 @@ module pocvm::vm {
         let sum: u128 = 0;
         let index: u8 = 0;
         while(index < WORDSIZE_BYTE) {
-            let byte = (*vector::borrow(memory, offset + (index as u64)) as u128) << (128 - index*8);
+            let byte = (*vector::borrow(memory, offset + (index as u64)) as u128) << (128 - (index + 1)*8);
             sum = sum + byte;
             index = index + 1;
         };
@@ -535,5 +528,129 @@ module pocvm::vm {
 
     fun balance(acct: &Account): u64 {
         acct.balance
+    }
+
+    #[test_only]
+    fun vec2word(src: &mut vector<u8>): u128 {
+        let offset = 0;
+        let spillover = offset + (WORDSIZE_BYTE as u64) - vector::length(src);
+        while(spillover > 0) {
+            vector::push_back<u8>(src, 0);
+            spillover = spillover - 1;
+        };
+
+        let sum: u128 = 0;
+        let index: u8 = 0;
+        while(index < WORDSIZE_BYTE) {
+            let byte = (*vector::borrow(src, offset + (index as u64)) as u128) << (128 - (index + 1)*8);
+            sum = sum + byte;
+            index = index + 1;
+        };
+        return sum
+    }
+
+    #[test_only]
+    public fun pub_sstore(vm_id: address, addr: address, slot: u128, val: u128) acquires State {
+        let state = borrow_global_mut<State>(vm_id);
+
+        let a2e = &mut state.a2e;
+        assert!(table::contains(a2e, addr), error::not_found(ACCOUNT_NOT_FOUND));
+
+        let e_addr = table::borrow(a2e, addr);
+        let acct = table::borrow_mut(&mut state.accounts, *e_addr);
+        sstore(acct, slot, val);
+    }
+
+    #[test_only]
+    public fun deploy_or_update(vm_id: address, e_addr: u128, value: u64, code: &vector<u8>) acquires State {
+        let state = borrow_global_mut<State>(vm_id);
+        let accounts = &mut state.accounts;
+        assert!(!table::contains(accounts, e_addr), error::already_exists(ACCOUNT_ALREADY_EXISTS));
+
+        if(!table::contains(accounts, e_addr)) {
+            table::add(accounts, e_addr, Account {
+                balance: value,
+                state: table::new<u128, u128>(),
+                code: *code,
+                nonce: 0,
+            });
+        } else {
+            let acct = table::borrow_mut(accounts, e_addr);
+            acct.balance = value;
+            acct.code = *code;
+        }        
+    }
+
+    #[test_only]
+    public fun execute(vm_id: address, caller: u128, to: u128, value: u64, calldata: &vector<u8>, code: &vector<u8>): vector<u8> acquires State {
+        let state = borrow_global_mut<State>(vm_id);
+        let accounts = &mut state.accounts;
+
+        if(!table::contains(accounts, caller)) {
+            table::add(accounts, caller, Account {
+                balance: 100000000000000, // mint enough balance
+                state: table::new<u128, u128>(),
+                code: vector::empty(),
+                nonce: 0,
+            });
+        };
+
+        if(!table::contains(accounts, to)) {
+            table::add(accounts, to, Account {
+                balance: value,
+                state: table::new<u128, u128>(),
+                code: *code,
+                nonce: 0,
+            });
+        };
+
+        let caller_acct = table::borrow_mut(accounts, caller);
+        caller_acct.balance = caller_acct.balance - value;
+
+        let stack = vector::empty<u128>();
+        let memory = vector::empty<u8>();
+        let ret_data = vector::empty<u8>(); // TODO: implement correctly
+        let depth = 0;
+
+        return run(state,
+            caller, to,
+            code,
+            calldata, &mut stack, &mut memory, &mut ret_data,
+            &mut depth
+        )
+    }
+
+    #[test(admin = @0xff)]
+    public entry fun test(admin: signer) acquires State {
+        let addr = signer::address_of(&admin);
+        aptos_framework::account::create_account_for_test(addr);
+
+        let vm_id = init(&admin, x"0011223344ff");
+
+        // let contract_addr: u128 = 0x2000;
+        let val = 1000;
+
+        /*
+        push1 01
+        push2 0002
+        add
+        caller
+        add
+        push1 00
+        mstore
+        push1 16 = 0x10
+        push1 00
+        return
+        */
+        let code = x"600161000201330160005260106000f3";
+        
+        let calldata = x"";
+        let caller = 0xc000;
+        let to = 0xc001;
+        let ret = execute(vm_id, caller, to, val, &calldata, &code);
+
+        let word = vec2word(&mut ret);
+
+        assert!(word == 49155, 0);
     }
 }
