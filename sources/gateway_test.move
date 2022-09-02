@@ -3,7 +3,6 @@ module pocvm::gateway_tests {
     use std::signer;
     use std::unit_test;
     use std::vector;
-    use std::string;
 
     use aptos_framework::coin;
     use aptos_framework::aptos_coin::{Self, AptosCoin};
@@ -17,19 +16,6 @@ module pocvm::gateway_tests {
 
     fun deployer(): signer {
         vector::pop_back(&mut unit_test::create_signers_for_testing(12))
-    }
-
-    #[test]
-    public entry fun sender_can_set_message() {
-        let account = get_account();
-        let addr = signer::address_of(&account);
-        aptos_framework::account::create_account_for_test(addr);
-        gateway::set_message(account,  string::utf8(b"Hello World"));
-
-        assert!(
-          gateway::get_message(addr) == string::utf8(b"Hello World"),
-          0
-        );
     }
 
     #[test]
