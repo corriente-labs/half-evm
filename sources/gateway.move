@@ -1,4 +1,4 @@
-module pocvm::vm {
+module pocvm::gateway {
     use std::error;
     use std::signer;
     use std::string;

@@ -1,5 +1,5 @@
 #[test_only]
-module pocvm::vm_tests {
+module pocvm::gateway_tests {
     use std::signer;
     use std::unit_test;
     use std::vector;
@@ -9,7 +9,7 @@ module pocvm::vm_tests {
     use aptos_framework::aptos_coin::{Self, AptosCoin};
     use aptos_framework::aptos_account;
 
-    use pocvm::vm;
+    use pocvm::gateway;
 
     fun get_account(): signer {
         vector::pop_back(&mut unit_test::create_signers_for_testing(1))
@@ -24,10 +24,10 @@ module pocvm::vm_tests {
         let account = get_account();
         let addr = signer::address_of(&account);
         aptos_framework::account::create_account_for_test(addr);
-        vm::set_message(account,  string::utf8(b"Hello World"));
+        gateway::set_message(account,  string::utf8(b"Hello World"));
 
         assert!(
-          vm::get_message(addr) == string::utf8(b"Hello World"),
+          gateway::get_message(addr) == string::utf8(b"Hello World"),
           0
         );
     }
@@ -39,38 +39,38 @@ module pocvm::vm_tests {
         aptos_framework::account::create_account_for_test(addr);
 
         let vm_deployer = deployer();
-        let vm_id = vm::init(vm_deployer, x"0011223344ff");
+        let vm_id = gateway::init(vm_deployer, x"0011223344ff");
 
         let e_addr = 1234u128;
-        vm::register(vm_id, &account, e_addr);
+        gateway::register(vm_id, &account, e_addr);
 
         assert!(
-            vm::read(vm_id, addr, 0) == 0,
+            gateway::read(vm_id, addr, 0) == 0,
             0
         );
 
-        vm::write(vm_id, addr, 0, 10);
-        vm::write(vm_id, addr, 1, 11);
-        vm::write(vm_id, addr, 2, 12);
+        gateway::write(vm_id, addr, 0, 10);
+        gateway::write(vm_id, addr, 1, 11);
+        gateway::write(vm_id, addr, 2, 12);
 
         assert!(
-            vm::read(vm_id, addr, 0) == 10,
-            0
-        );
-
-        assert!(
-            vm::read(vm_id, addr, 1) == 11,
+            gateway::read(vm_id, addr, 0) == 10,
             0
         );
 
         assert!(
-            vm::read(vm_id, addr, 2) == 12,
+            gateway::read(vm_id, addr, 1) == 11,
             0
         );
 
-        vm::write(vm_id, addr, 2, 22);
         assert!(
-            vm::read(vm_id, addr, 2) == 22,
+            gateway::read(vm_id, addr, 2) == 12,
+            0
+        );
+
+        gateway::write(vm_id, addr, 2, 22);
+        assert!(
+            gateway::read(vm_id, addr, 2) == 22,
             0
         );
     }
@@ -92,13 +92,13 @@ module pocvm::vm_tests {
         );
 
         let vm_deployer = deployer();
-        let vm_id = vm::init(vm_deployer, x"0011223344ff");
+        let vm_id = gateway::init(vm_deployer, x"0011223344ff");
 
         let e_addr = 1234u128;
-        vm::register(vm_id, &user, e_addr);
+        gateway::register(vm_id, &user, e_addr);
 
         // deposit to vm
-        vm::opt_in(vm_id, &user, 123);
+        gateway::opt_in(vm_id, &user, 123);
 
         // assert balance after opt-in
         assert!(
@@ -106,12 +106,12 @@ module pocvm::vm_tests {
             0
         );
         assert!(
-            vm::balance(vm_id, addr) == 123,
+            gateway::balance(vm_id, addr) == 123,
             0
         );
 
         // withdraw from vm
-        vm::opt_out(vm_id, &user, 100);
+        gateway::opt_out(vm_id, &user, 100);
 
         // assert balance after opt-out
         assert!(
@@ -119,7 +119,7 @@ module pocvm::vm_tests {
             0
         );
         assert!(
-            vm::balance(vm_id, addr) == 23,
+            gateway::balance(vm_id, addr) == 23,
             0
         );
 
