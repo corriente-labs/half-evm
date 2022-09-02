@@ -7,6 +7,7 @@ module pocvm::vm {
     use aptos_framework::coin;
     use aptos_framework::aptos_coin::{AptosCoin};
     use aptos_std::table::{Self, Table};
+    use aptos_std::event;
 
     const WORDSIZE_BYTE: u8 = 16; // 128 bit
 
@@ -31,6 +32,7 @@ module pocvm::vm {
         signer_capability: account::SignerCapability,
         a2e: Table<address, u128>,
         accounts: Table<u128, Account>,
+        events: event::EventHandle<EvmEvent>,
     }
 
     struct Account has store {
@@ -38,6 +40,11 @@ module pocvm::vm {
         state: Table<u128, u128>,
         code: vector<u8>,
         nonce: u128,
+    }
+
+    struct EvmEvent has drop, store {
+        data: vector<u8>,
+        topics: vector<u128>,
     }
 
     // init resource account and vm state
@@ -52,6 +59,7 @@ module pocvm::vm {
             signer_capability: resource_signer_cap,
             a2e: table::new<address, u128>(),
             accounts: table::new<u128, Account>(),
+            events: account::new_event_handle<EvmEvent>(&resource_signer),
         });
 
         let vm_id = signer::address_of(&resource_signer);
@@ -379,6 +387,27 @@ module pocvm::vm {
 
             // balance
             if (op == 0x31) {
+                pc = pc + 1;
+                continue
+            };
+
+            // log0
+            if (op == 0xa0) {
+                let offset = vector::pop_back(stack);
+                let size = vector::pop_back(stack);
+                let data = mem_slice(memory, (offset as u64), (size as u64));
+
+                event::emit_event(&mut state.events, EvmEvent{
+                    data: data,
+                    topics: vector::empty<u128>(),
+                });
+
+                pc = pc + 1;
+                continue
+            };
+
+            // log1
+            if (op == 0xa0) {
                 pc = pc + 1;
                 continue
             };
