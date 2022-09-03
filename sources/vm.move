@@ -263,6 +263,26 @@ module pocvm::vm {
             
             // calldataload
             if (op == 0x35) {
+                let offset = (vector::pop_back<u128>(stack) as u64);
+
+                let vec = vector::empty<u8>();
+
+                let index = 0;
+                while(offset + index < vector::length(calldata) && index < WORDSIZE_BYTE_u64) {
+                    let value = *vector::borrow(calldata, offset + index);
+                    vector::push_back(&mut vec, value);
+                    index = index + 1;
+                };
+
+                // fill with padding
+                while(index < WORDSIZE_BYTE_u64) {
+                    vector::push_back(&mut vec, 0);
+                    index = index + 1;
+                };
+
+                let value = vec2word(&mut vec, 0);
+                vector::push_back(stack, value);    // push resulting value
+
                 pc = pc + 1;
                 continue
             };
@@ -296,6 +316,7 @@ module pocvm::vm {
                 while(index < size) {
                     let dest = vector::borrow_mut(memory, dest_offset + index);
                     *dest = 0;
+                    index = index + 1;
                 };
 
                 pc = pc + 1;
@@ -541,9 +562,7 @@ module pocvm::vm {
         acct.balance
     }
 
-    #[test_only]
-    fun vec2word(src: &mut vector<u8>): u128 {
-        let offset = 0;
+    fun vec2word(src: &mut vector<u8>, offset: u64): u128 {
         mem_expand(src, offset, WORDSIZE_BYTE_u64);
 
         let sum: u128 = 0;
@@ -660,7 +679,7 @@ module pocvm::vm {
         let to = 0xc001;
         let ret = execute(vm_id, caller, to, val, &calldata, &code);
 
-        let word = vec2word(&mut ret);
+        let word = vec2word(&mut ret, 0);
         debug::print<u128>(&word);
 
         assert!(word == 49155, 0);
@@ -712,7 +731,62 @@ module pocvm::vm {
         let to = 0xc001;
         let ret = execute(vm_id, caller, to, val, &calldata, &code);
 
-        let word = vec2word(&mut ret);
+        let word = vec2word(&mut ret, 0);
+        debug::print<u128>(&word);
+
+        assert!(word == 49155, 0);
+    }
+
+    
+    #[test(admin = @0xff)]
+    public entry fun test_arith_calldata(admin: signer) acquires State {
+        let addr = signer::address_of(&admin);
+        aptos_framework::account::create_account_for_test(addr);
+
+        let vm_id = init(&admin, x"0011223344ff");
+
+        // let contract_addr: u128 = 0x2000;
+        let val = 1000;
+
+        /*
+        push1 01
+        calldataload; 0x35
+
+        push2 0002
+        add
+        caller      ; 0x33
+
+        push1 00
+        mstore      ; 0x52
+        push 00
+        mload       ; 0x51
+
+        push1 00
+        sstore      ; 0x55
+        push 00
+        sload       ; 0x54
+
+        add
+
+        push1 01
+        sstore      ; 0x55
+        push 01
+        sload       ; 0x54
+
+        push1 01    ; one offset 
+        mstore
+        push1 16    ; 0x10 = size in byte
+        push1 00    ; offset
+        return
+        */
+        let code = x"60003561000201336000526000516000556000540160015560015460015260106001f3";
+
+        let calldata = x"00000000000000000000000000000001";
+        let caller = 0xc000;
+        let to = 0xc001;
+        let ret = execute(vm_id, caller, to, val, &calldata, &code);
+
+        let word = vec2word(&mut ret, 0);
         debug::print<u128>(&word);
 
         assert!(word == 49155, 0);
