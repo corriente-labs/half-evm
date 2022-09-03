@@ -749,10 +749,19 @@ module pocvm::vm {
         let val = 1000;
 
         /*
-        push1 01
+        push1 00
         calldataload; 0x35
 
-        push2 0002
+        push 0x10   ; size
+        push 00     ; offset
+        push 00     ; dest_offset
+        calldatacopy; 0x37
+        push 00
+        mload       ; 0x51
+
+        add
+
+        push2 0001
         add
         caller      ; 0x33
 
@@ -779,7 +788,7 @@ module pocvm::vm {
         push1 00    ; offset
         return
         */
-        let code = x"60003561000201336000526000516000556000540160015560015460015260106001f3";
+        let code = x"600035601060006000376000510161000101336000526000516000556000540160015560015460015260106001f3";
 
         let calldata = x"00000000000000000000000000000001";
         let caller = 0xc000;
