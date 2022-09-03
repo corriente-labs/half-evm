@@ -23,6 +23,7 @@ module pocvm::vm {
 
     const VM_CALL_DEPTH_OVERFLOW: u64 = 1000;
     const VM_INSUFFICIENT_BALANCE: u64 = 1001;
+    const VM_NO_CODE: u64 = 1001;
 
     struct Message has copy, drop {
         origin: u128,
@@ -436,7 +437,8 @@ module pocvm::vm {
                 assert!(next_caller.balance >= value, VM_INSUFFICIENT_BALANCE);
                 next_caller.balance = next_caller.balance - value;
 
-                let next_callee = table::borrow(& state.accounts, to);
+                assert!(table::contains(&state.accounts, to), VM_NO_CODE);
+                let next_callee = table::borrow(&state.accounts, to);
                 let called_code = next_callee.code;
 
                 let next_calldata = mem_slice(memory, (args_offset as u64), (args_size as u64));
@@ -591,8 +593,7 @@ module pocvm::vm {
     public fun deploy_or_update(vm_id: address, e_addr: u128, value: u64, code: &vector<u8>) acquires State {
         let state = borrow_global_mut<State>(vm_id);
         let accounts = &mut state.accounts;
-        assert!(!table::contains(accounts, e_addr), error::already_exists(ACCOUNT_ALREADY_EXISTS));
-
+        
         if(!table::contains(accounts, e_addr)) {
             table::add(accounts, e_addr, Account {
                 balance: value,
@@ -686,7 +687,7 @@ module pocvm::vm {
     }
 
     #[test(admin = @0xff)]
-    public entry fun test_arith_storage(admin: signer) acquires State {
+    public entry fun test_storage(admin: signer) acquires State {
         let addr = signer::address_of(&admin);
         aptos_framework::account::create_account_for_test(addr);
 
@@ -737,9 +738,8 @@ module pocvm::vm {
         assert!(word == 49155, 0);
     }
 
-    
     #[test(admin = @0xff)]
-    public entry fun test_arith_calldata(admin: signer) acquires State {
+    public entry fun test_calldata(admin: signer) acquires State {
         let addr = signer::address_of(&admin);
         aptos_framework::account::create_account_for_test(addr);
 
@@ -799,5 +799,98 @@ module pocvm::vm {
         debug::print<u128>(&word);
 
         assert!(word == 49155, 0);
+    }
+
+    #[test(admin = @0xff)]
+    public entry fun test_call(admin: signer) acquires State {
+        let addr = signer::address_of(&admin);
+        aptos_framework::account::create_account_for_test(addr);
+
+        let vm_id = init(&admin, x"0011223344ff");
+
+        // let contract_addr: u128 = 0x2000;
+        let val = 1000;
+
+        /*
+        push1 00
+        calldataload; 0x35
+
+        push 0x10   ; size
+        push 00     ; offset
+        push 00     ; dest_offset
+        calldatacopy; 0x37
+        push 00
+        mload       ; 0x51
+
+        add
+
+        push2 0001
+        add
+        caller      ; 0x33
+
+        push1 00
+        mstore      ; 0x52
+        push 00
+        mload       ; 0x51
+
+        push1 00
+        sstore      ; 0x55
+        push 00
+        sload       ; 0x54
+
+        add
+
+        push1 01
+        sstore      ; 0x55
+        push 01
+        sload       ; 0x54
+
+        push1 01    ; one offset 
+        mstore
+        push1 16    ; 0x10 = size in byte
+        push1 00    ; offset
+        return
+        */
+        let code = x"600035601060006000376000510161000101336000526000516000556000540160015560015460015260106001f3";
+        let code_addr = 0xcc33;
+        deploy_or_update(vm_id, code_addr, 0, &code);
+
+        /*
+        push ff
+        push 00
+        mstore      ; args '0x00..ff' is set
+
+        push 0x10   ; ret size
+        push 00     ; ret offset
+        push 10     ; args size
+        push 00     ; args offset
+        push 00     ; value
+        push2 0xcc33; address
+        push 00     ; gas
+        call        ; 0xf1
+
+        push 00
+        mload
+        push 00
+        calldataload; 0x35
+        add
+
+        push 00     ; offset
+        mstore
+
+        push 0x10   ; size
+        push 00     ; offset
+        return
+        */
+        let code = x"60ff6000526010600060106000600061cc336000f16000516000350160005260106000f3";
+        let calldata = x"000000000000000000000000000000ee";
+        let caller = 0xc000;
+        let to = 0xc001;
+        let ret = execute(vm_id, caller, to, val, &calldata, &code);
+
+        let word = vec2word(&mut ret, 0);
+        debug::print<u128>(&word);
+
+        assert!(word == to + 0xff + 0xff + 1 + 0xee, 0);
     }
 }
