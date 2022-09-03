@@ -623,7 +623,7 @@ module pocvm::vm {
     }
 
     #[test(admin = @0xff)]
-    public entry fun test(admin: signer) acquires State {
+    public entry fun test_arith(admin: signer) acquires State {
         let addr = signer::address_of(&admin);
         aptos_framework::account::create_account_for_test(addr);
 
@@ -636,7 +636,11 @@ module pocvm::vm {
         push1 01
         push2 0002
         add
-        caller
+        caller      ; 0x33
+        push1 00
+        mstore      ; 0x52
+        push 00
+        mload       ; 0x51
         add
         push1 00
         mstore
@@ -644,7 +648,7 @@ module pocvm::vm {
         push1 00
         return
         */
-        let code = x"600161000201330160005260106000f3";
+        let code = x"600161000201336000526000510160005260106000f3";
         
         let calldata = x"";
         let caller = 0xc000;
