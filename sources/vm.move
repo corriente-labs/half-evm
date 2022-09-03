@@ -893,4 +893,39 @@ module pocvm::vm {
 
         assert!(word == to + 0xff + 0xff + 1 + 0xee, 0);
     }
+
+    #[test(admin = @0xff)]
+    public entry fun test_emit_event(admin: signer) acquires State {
+        let addr = signer::address_of(&admin);
+        aptos_framework::account::create_account_for_test(addr);
+
+        let vm_id = init(&admin, x"0011223344ff");
+
+        let state = borrow_global<State>(vm_id);
+        let count = event::counter<EvmEvent>(&state.events);
+        assert!(count == 0, 0);
+
+        // let contract_addr: u128 = 0x2000;
+        let val = 1000;
+
+        /*
+        push4 0xaabbccdd
+        push 00
+        mstore
+        push 0x10
+        push 0
+        log0    ; 0xa0
+        stop
+        */
+        let code = x"63aabbccdd60005260106000a000";
+        
+        let calldata = x"";
+        let caller = 0xc000;
+        let to = 0xc001;
+        let _ret = execute(vm_id, caller, to, val, &calldata, &code);
+
+        let state = borrow_global<State>(vm_id);
+        let count = event::counter<EvmEvent>(&state.events);
+        assert!(count == 1, 0);
+    }
 }
