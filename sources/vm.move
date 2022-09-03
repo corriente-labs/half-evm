@@ -13,6 +13,7 @@ module pocvm::vm {
     friend pocvm::gateway;
 
     const WORDSIZE_BYTE: u8 = 16; // 128 bit
+    const WORDSIZE_BYTE_u64: u64 = 16; // 128 bit
 
     const STATE_ALREADY_EXISTS: u64 = 0;
     const ACCOUNT_ALREADY_EXISTS: u64 = 1;
@@ -457,10 +458,13 @@ module pocvm::vm {
     }
 
     fun mload(memory: &mut vector<u8>, offset: u64): u128 {
-        let spillover = offset + (WORDSIZE_BYTE as u64) - vector::length(memory);
-        while(spillover > 0) {
-            vector::push_back<u8>(memory, 0);
-            spillover = spillover - 1;
+        let size = (WORDSIZE_BYTE as u64);
+        if(offset + size > vector::length(memory)) {
+            let spillover = offset + size - vector::length(memory);
+            while(spillover > 0) {
+                vector::push_back<u8>(memory, 0);
+                spillover = spillover - 1;
+            };
         };
 
         let sum: u128 = 0;
@@ -473,11 +477,7 @@ module pocvm::vm {
         return sum
     }
     fun mstore(memory: &mut vector<u8>, offset: u64, val: u128) {
-        let spillover = offset + (WORDSIZE_BYTE as u64) - vector::length(memory);
-        while(spillover > 0) {
-            vector::push_back<u8>(memory, 0);
-            spillover = spillover - 1;
-        };
+        mem_expand(memory, offset);
 
         let index: u8 = 0;
         while(index < WORDSIZE_BYTE) {
@@ -488,11 +488,7 @@ module pocvm::vm {
         };
     }
     fun mem_slice(memory: &mut vector<u8>, offset: u64, size: u64): vector<u8> {
-        let spillover = offset + size - vector::length(memory);
-        while(spillover > 0) {
-            vector::push_back<u8>(memory, 0);
-            spillover = spillover - 1;
-        };
+        mem_expand(memory, offset);
 
         let index: u64 = 0;
         let ret = vector::empty<u8>();
@@ -509,6 +505,25 @@ module pocvm::vm {
             let dst_byte = vector::borrow_mut(dst, dst_offset + index);
             *dst_byte = *vector::borrow(src, index);
             index = index + 1;
+        };
+    }
+
+    fun mem_expand(memory: &mut vector<u8>, offset: u64) {
+        if(offset + WORDSIZE_BYTE_u64 > vector::length(memory)) {
+            let spillover = offset + WORDSIZE_BYTE_u64 - vector::length(memory);
+            let padding = WORDSIZE_BYTE_u64 - spillover % WORDSIZE_BYTE_u64;
+
+            while(spillover > 0) {
+                vector::push_back<u8>(memory, 0);
+                spillover = spillover - 1;
+            };
+
+            if(padding < WORDSIZE_BYTE_u64) {
+                while(padding > 0) {
+                    vector::push_back<u8>(memory, 0);
+                    padding = padding - 1;
+                };
+            };
         };
     }
 
@@ -535,11 +550,7 @@ module pocvm::vm {
     #[test_only]
     fun vec2word(src: &mut vector<u8>): u128 {
         let offset = 0;
-        let spillover = offset + (WORDSIZE_BYTE as u64) - vector::length(src);
-        while(spillover > 0) {
-            vector::push_back<u8>(src, 0);
-            spillover = spillover - 1;
-        };
+        mem_expand(src, offset);
 
         let sum: u128 = 0;
         let index: u8 = 0;
@@ -649,6 +660,58 @@ module pocvm::vm {
         return
         */
         let code = x"600161000201336000526000510160005260106000f3";
+        
+        let calldata = x"";
+        let caller = 0xc000;
+        let to = 0xc001;
+        let ret = execute(vm_id, caller, to, val, &calldata, &code);
+
+        let word = vec2word(&mut ret);
+        debug::print<u128>(&word);
+
+        assert!(word == 49155, 0);
+    }
+
+    #[test(admin = @0xff)]
+    public entry fun test_arith_storage(admin: signer) acquires State {
+        let addr = signer::address_of(&admin);
+        aptos_framework::account::create_account_for_test(addr);
+
+        let vm_id = init(&admin, x"0011223344ff");
+
+        // let contract_addr: u128 = 0x2000;
+        let val = 1000;
+
+        /*
+        push1 01
+        push2 0002
+        add
+        caller      ; 0x33
+
+        push1 00
+        mstore      ; 0x52
+        push 00
+        mload       ; 0x51
+
+        push1 00
+        sstore      ; 0x55
+        push 00
+        sload       ; 0x54
+
+        add
+
+        push1 01
+        sstore      ; 0x55
+        push 01
+        sload       ; 0x54
+
+        push1 01    ; one offset 
+        mstore
+        push1 16    ; 0x10 = size in byte
+        push1 00    ; offset
+        return
+        */
+        let code = x"600161000201336000526000516000556000540160015560015460015260106001f3";
         
         let calldata = x"";
         let caller = 0xc000;
