@@ -650,6 +650,7 @@ module pocvm::vm {
         let ret = execute(vm_id, caller, to, val, &calldata, &code);
 
         let word = vec2word(&mut ret);
+        debug::print<u128>(&word);
 
         assert!(word == 49155, 0);
     }
