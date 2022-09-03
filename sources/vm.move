@@ -277,23 +277,11 @@ module pocvm::vm {
             
             // calldatacopy
             if (op == 0x37) {
-                let dest_offset = vector::pop_back<u128>(stack);
-                let offset = vector::pop_back<u128>(stack);
-                let size = vector::pop_back<u128>(stack);
-
-                let dest_offset = (dest_offset as u64);
-                let offset = (offset as u64);
-                let size = (size as u64);
+                let dest_offset = (vector::pop_back<u128>(stack) as u64);
+                let offset = (vector::pop_back<u128>(stack) as u64);
+                let size = (vector::pop_back<u128>(stack) as u64);
                 
-                // extends memory
-                if(vector::length(memory) > dest_offset + size) {
-                    let new_chunk_length = vector::length(memory) - (dest_offset + size);
-                    let count = 0;
-                    while(count < new_chunk_length) {
-                        vector::push_back(memory, 0u8);
-                        count = count + 1;
-                    };
-                };
+                mem_expand(memory, dest_offset, size);
 
                 // copy calldata elements to memory
                 let index = 0;
@@ -302,6 +290,12 @@ module pocvm::vm {
                     let dest = vector::borrow_mut(memory, dest_offset + index);
                     *dest = value;
                     index = index + 1;
+                };
+
+                // fill with padding
+                while(index < size) {
+                    let dest = vector::borrow_mut(memory, dest_offset + index);
+                    *dest = 0;
                 };
 
                 pc = pc + 1;
@@ -477,7 +471,7 @@ module pocvm::vm {
         return sum
     }
     fun mstore(memory: &mut vector<u8>, offset: u64, val: u128) {
-        mem_expand(memory, offset);
+        mem_expand(memory, offset, WORDSIZE_BYTE_u64);
 
         let index: u8 = 0;
         while(index < WORDSIZE_BYTE) {
@@ -488,7 +482,7 @@ module pocvm::vm {
         };
     }
     fun mem_slice(memory: &mut vector<u8>, offset: u64, size: u64): vector<u8> {
-        mem_expand(memory, offset);
+        mem_expand(memory, offset, size);
 
         let index: u64 = 0;
         let ret = vector::empty<u8>();
@@ -508,9 +502,9 @@ module pocvm::vm {
         };
     }
 
-    fun mem_expand(memory: &mut vector<u8>, offset: u64) {
-        if(offset + WORDSIZE_BYTE_u64 > vector::length(memory)) {
-            let spillover = offset + WORDSIZE_BYTE_u64 - vector::length(memory);
+    fun mem_expand(memory: &mut vector<u8>, offset: u64, size: u64) {
+        if(offset + size > vector::length(memory)) {
+            let spillover = offset + size - vector::length(memory);
             let padding = WORDSIZE_BYTE_u64 - spillover % WORDSIZE_BYTE_u64;
 
             while(spillover > 0) {
@@ -550,7 +544,7 @@ module pocvm::vm {
     #[test_only]
     fun vec2word(src: &mut vector<u8>): u128 {
         let offset = 0;
-        mem_expand(src, offset);
+        mem_expand(src, offset, WORDSIZE_BYTE_u64);
 
         let sum: u128 = 0;
         let index: u8 = 0;
