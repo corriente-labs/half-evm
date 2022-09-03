@@ -42,7 +42,7 @@ module pocvm::vm {
 
     struct Account has store {
         balance: u64,
-        state: Table<u128, u128>,
+        storage: Table<u128, u128>,
         code: vector<u8>,
         nonce: u128,
     }
@@ -84,7 +84,7 @@ module pocvm::vm {
         table::add(a2e, account_addr, e_addr);
         table::add(accounts, e_addr, Account {
             balance: 0,
-            state: table::new<u128, u128>(),
+            storage: table::new<u128, u128>(),
             code: vector::empty(),
             nonce: 0,
         });
@@ -545,18 +545,18 @@ module pocvm::vm {
     }
 
     fun sload(acct: &Account, slot: u128): u128 {
-        if(table::contains(&acct.state, slot)) {
-            *table::borrow(&acct.state, slot)
+        if(table::contains(&acct.storage, slot)) {
+            *table::borrow(&acct.storage, slot)
         } else {
             0
         }
     }
     fun sstore(acct: &mut Account, slot: u128, val: u128) {
-        if(table::contains(&acct.state, slot)) {    
-            let v = table::borrow_mut(&mut acct.state, slot);
+        if(table::contains(&acct.storage, slot)) {    
+            let v = table::borrow_mut(&mut acct.storage, slot);
             *v = val;
         } else {
-            table::add(&mut acct.state, slot, val);
+            table::add(&mut acct.storage, slot, val);
         }
     }
 
@@ -597,7 +597,7 @@ module pocvm::vm {
         if(!table::contains(accounts, e_addr)) {
             table::add(accounts, e_addr, Account {
                 balance: value,
-                state: table::new<u128, u128>(),
+                storage: table::new<u128, u128>(),
                 code: *code,
                 nonce: 0,
             });
@@ -616,7 +616,7 @@ module pocvm::vm {
         if(!table::contains(accounts, caller)) {
             table::add(accounts, caller, Account {
                 balance: 100000000000000, // mint enough balance
-                state: table::new<u128, u128>(),
+                storage: table::new<u128, u128>(),
                 code: vector::empty(),
                 nonce: 0,
             });
@@ -625,7 +625,7 @@ module pocvm::vm {
         if(!table::contains(accounts, to)) {
             table::add(accounts, to, Account {
                 balance: value,
-                state: table::new<u128, u128>(),
+                storage: table::new<u128, u128>(),
                 code: *code,
                 nonce: 0,
             });
