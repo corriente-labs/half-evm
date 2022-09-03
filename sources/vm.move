@@ -10,6 +10,8 @@ module pocvm::vm {
     use aptos_std::event;
     use aptos_std::debug;
 
+    friend pocvm::gateway;
+
     const WORDSIZE_BYTE: u8 = 16; // 128 bit
 
     const STATE_ALREADY_EXISTS: u64 = 0;
@@ -49,7 +51,7 @@ module pocvm::vm {
     }
 
     // init resource account and vm state
-    public fun init(acct: &signer, seed: vector<u8>): address {
+    public(friend) fun init(acct: &signer, seed: vector<u8>): address {
         let account_addr = signer::address_of(acct);
         assert!(!exists<State>(account_addr), error::already_exists(STATE_ALREADY_EXISTS));
 
@@ -67,7 +69,7 @@ module pocvm::vm {
         vm_id
     }
 
-    public fun register(vm_id: address, acct: &signer, e_addr: u128) acquires State {
+    public(friend) fun register(vm_id: address, acct: &signer, e_addr: u128) acquires State {
         let account_addr = signer::address_of(acct);
         let state = borrow_global_mut<State>(vm_id);
         
@@ -86,7 +88,7 @@ module pocvm::vm {
         });
     }
 
-    public fun pub_sload(vm_id: address, addr: address, slot: u128): u128 acquires State {
+    public(friend) fun pub_sload(vm_id: address, addr: address, slot: u128): u128 acquires State {
         let state = borrow_global<State>(vm_id);
 
         let a2e = &state.a2e;
@@ -98,7 +100,7 @@ module pocvm::vm {
         sload(acct, slot)
     }
 
-    public fun pub_balance(vm_id: address, addr: address): u64 acquires State {
+    public(friend) fun pub_balance(vm_id: address, addr: address): u64 acquires State {
         let state = borrow_global<State>(vm_id);
 
         let a2e = &state.a2e;
@@ -110,7 +112,7 @@ module pocvm::vm {
         balance(acct)
     }
 
-    public fun opt_in(vm_id: address, from: address, val: u64) acquires State {
+    public(friend) fun opt_in(vm_id: address, from: address, val: u64) acquires State {
         let state = borrow_global_mut<State>(vm_id);
 
         let a2e = &mut state.a2e;
@@ -121,7 +123,7 @@ module pocvm::vm {
         acct.balance = acct.balance + val; // opt-in
     }
 
-    public fun opt_out(vm_id: address, to: address, val: u64): signer acquires State {
+    public(friend) fun opt_out(vm_id: address, to: address, val: u64): signer acquires State {
         let state = borrow_global_mut<State>(vm_id);
 
         let a2e = &mut state.a2e;
