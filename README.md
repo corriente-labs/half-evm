@@ -75,7 +75,6 @@ You should see the transaction detail in explorer https://explorer.devnet.aptos.
 ### Call
 ```
 aptos move run --function-id 0x21b2b52b63d16db70c44995d08023133286340f44324de3c8788f3598848b786::message::set_message --args string:hi!
-{
 ```
 ```
 {

@@ -162,6 +162,44 @@ module pocvm::vm {
         )
     }
 
+    public(friend) fun call(vm_id: address, caller: u128, to: u128, value: u64, calldata: &vector<u8>, code: &vector<u8>): vector<u8> acquires State {
+        let state = borrow_global_mut<State>(vm_id);
+        let accounts = &mut state.accounts;
+
+        if(!table::contains(accounts, caller)) {
+            table::add(accounts, caller, Account {
+                balance: 100000000000000, // mint enough balance
+                storage: table::new<u128, u128>(),
+                code: vector::empty(),
+                nonce: 0,
+            });
+        };
+
+        if(!table::contains(accounts, to)) {
+            table::add(accounts, to, Account {
+                balance: value,
+                storage: table::new<u128, u128>(),
+                code: *code,
+                nonce: 0,
+            });
+        };
+
+        let caller_acct = table::borrow_mut(accounts, caller);
+        caller_acct.balance = caller_acct.balance - value;
+
+        let stack = vector::empty<u128>();
+        let memory = vector::empty<u8>();
+        let ret_data = vector::empty<u8>(); // TODO: implement correctly
+        let depth = 0;
+
+        return run(state,
+            caller, to,
+            code,
+            calldata, &mut stack, &mut memory, &mut ret_data,
+            &mut depth
+        )
+    }
+
     fun run(
         state: &mut State,
         caller_addr: u128,

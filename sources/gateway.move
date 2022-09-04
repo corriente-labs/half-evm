@@ -82,6 +82,9 @@ module pocvm::gateway {
         let from = vm::opt_out(vm_id, addr, val);
         coin::transfer<AptosCoin>(&from, addr, val); // transfer coin
     }
+    public entry fun call(vm_id: address, caller: u128, to: u128, value: u64, calldata: &vector<u8>, code: &vector<u8>): vector<u8> {
+        vm::call(vm_id, caller, to, value, calldata, code)
+    }
 
     // #[test]
     // public entry fun test_accepting_message() {
