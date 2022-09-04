@@ -23,6 +23,15 @@ module pocvm::gateway {
         vm_id
     }
 
+    public entry fun init2(acct: signer): address {
+        let vm_id = vm::init(&acct, x"0011223344dd");
+        vm_id
+    }
+
+    public entry fun init3(acct: signer) {
+        let _vm_id = vm::init(&acct, x"0011223344dd");
+    }
+
     public entry fun accept_message(e_addr: vector<u8>, digest: vector<u8>, sig: vector<u8>): bool {
         let sig64 = vector::empty<u8>();
         let count = 0;

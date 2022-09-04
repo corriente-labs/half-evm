@@ -8,7 +8,7 @@ module pocvm::vm {
     use aptos_framework::aptos_coin::{AptosCoin};
     use aptos_std::table::{Self, Table};
     use aptos_std::event;
-    use aptos_std::debug;
+    // use aptos_std::debug;
 
     friend pocvm::gateway;
 
@@ -17,6 +17,7 @@ module pocvm::vm {
 
     const STATE_ALREADY_EXISTS: u64 = 0;
     const ACCOUNT_ALREADY_EXISTS: u64 = 1;
+    const INIT_EVENT_HOLDER_ALREADY_EXISTS: u64 = 0;
 
     const ACCOUNT_NOT_FOUND: u64 = 2;
     const INSUFFICIENT_BALANCE: u64 = 3;
@@ -47,15 +48,24 @@ module pocvm::vm {
         nonce: u128,
     }
 
+    struct VmInitEventHolder has key {
+        events: event::EventHandle<VmInitEvent>,
+    }
+
+    struct VmInitEvent has drop, store {
+        vm_id: address,
+    }
+
     struct EvmEvent has drop, store {
         data: vector<u8>,
         topics: vector<u128>,
     }
 
     // init resource account and vm state
-    public(friend) fun init(acct: &signer, seed: vector<u8>): address {
+    public(friend) fun init(acct: &signer, seed: vector<u8>): address acquires VmInitEventHolder {
         let account_addr = signer::address_of(acct);
         assert!(!exists<State>(account_addr), error::already_exists(STATE_ALREADY_EXISTS));
+        assert!(!exists<VmInitEventHolder>(account_addr), error::already_exists(INIT_EVENT_HOLDER_ALREADY_EXISTS));
 
         let (resource_signer, resource_signer_cap) = account::create_resource_account(acct, seed);
         coin::register<AptosCoin>(&resource_signer);
@@ -68,6 +78,17 @@ module pocvm::vm {
         });
 
         let vm_id = signer::address_of(&resource_signer);
+
+        move_to<VmInitEventHolder>(&resource_signer, VmInitEventHolder {
+            events: account::new_event_handle<VmInitEvent>(&resource_signer),
+        });
+
+        let holder = borrow_global_mut<VmInitEventHolder>(vm_id);
+
+        event::emit_event(&mut holder.events, VmInitEvent {
+            vm_id: vm_id,
+        });
+
         vm_id
     }
 
