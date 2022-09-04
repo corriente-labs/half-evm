@@ -687,6 +687,85 @@ module pocvm::vm {
     }
 
     #[test(admin = @0xff)]
+    public entry fun test_memory(admin: signer) acquires State {
+        let addr = signer::address_of(&admin);
+        aptos_framework::account::create_account_for_test(addr);
+
+        let vm_id = init(&admin, x"0011223344ff");
+
+        // let contract_addr: u128 = 0x2000;
+        let val = 1000;
+
+        /*
+        push1 01
+        push1 00
+        mstore      ; 0x52
+        msize       ; 0x59
+        // 16
+
+        push1 02
+        push1 0x10  ; 16
+        mstore
+        msize
+        // 32
+        add
+
+        push1 03
+        push1 0x20  ; 32
+        mstore
+        msize
+        // 48
+        add
+
+        push1 0x10
+        push1 0xf0  ; 240
+        mstore
+        msize
+        // 256
+        add
+
+        push1 0x00
+        mload
+        //  0x01
+
+        push1 0x10
+        mload
+        //  0x02
+
+        push1 0x20
+        mload
+        //  0x03
+
+        push1 0xf0
+        mload
+        //  0x10
+
+        add
+        add
+        add
+        add
+
+        push1 0x00
+        mstore
+
+        push1 0x10
+        push1 0x00
+        return
+        */
+        let code = x"6001600052596002601052590160036020525901601060f052590160005160105160205160f0510101010160005260106000f3";
+        
+        let calldata = x"";
+        let caller = 0xc000;
+        let to = 0xc001;
+        let ret = execute(vm_id, caller, to, val, &calldata, &code);
+
+        let word = vec2word(&mut ret, 0);
+        debug::print<u128>(&word);
+
+        assert!(word == 16 + 32 + 48 + 256 + 1 + 2 + 3 + 16, 0);
+    }
+
+    #[test(admin = @0xff)]
     public entry fun test_storage(admin: signer) acquires State {
         let addr = signer::address_of(&admin);
         aptos_framework::account::create_account_for_test(addr);
