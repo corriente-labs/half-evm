@@ -8,7 +8,9 @@ module pocvm::vm {
     use aptos_framework::aptos_coin::{AptosCoin};
     use aptos_std::table::{Self, Table};
     use aptos_std::event;
-    // use aptos_std::debug;
+
+    #[test_only]
+    use aptos_std::debug;
 
     friend pocvm::gateway;
 
@@ -213,12 +215,19 @@ module pocvm::vm {
         let ret_data = vector::empty<u8>(); // TODO: implement correctly
         let depth = 0;
 
-        return run(state,
+        let ret = run(state,
             caller, to,
             code,
             calldata, &mut stack, &mut memory, &mut ret_data,
             &mut depth
-        )
+        );
+
+        event::emit_event(&mut state.events, EvmEvent{
+            data: ret,
+            topics: vector::empty<u128>(),
+        });
+
+        return ret
     }
 
     fun run(
@@ -707,7 +716,7 @@ module pocvm::vm {
     }
 
     #[test(admin = @0xff)]
-    public entry fun test_arith(admin: signer) acquires State {
+    public entry fun test_arith(admin: signer) acquires State, VmInitEventHolder {
         let addr = signer::address_of(&admin);
         aptos_framework::account::create_account_for_test(addr);
 
@@ -746,7 +755,7 @@ module pocvm::vm {
     }
 
     #[test(admin = @0xff)]
-    public entry fun test_storage(admin: signer) acquires State {
+    public entry fun test_storage(admin: signer) acquires State, VmInitEventHolder {
         let addr = signer::address_of(&admin);
         aptos_framework::account::create_account_for_test(addr);
 
@@ -798,7 +807,7 @@ module pocvm::vm {
     }
 
     #[test(admin = @0xff)]
-    public entry fun test_calldata(admin: signer) acquires State {
+    public entry fun test_calldata(admin: signer) acquires State, VmInitEventHolder {
         let addr = signer::address_of(&admin);
         aptos_framework::account::create_account_for_test(addr);
 
@@ -861,7 +870,7 @@ module pocvm::vm {
     }
 
     #[test(admin = @0xff)]
-    public entry fun test_call(admin: signer) acquires State {
+    public entry fun test_call(admin: signer) acquires State, VmInitEventHolder {
         let addr = signer::address_of(&admin);
         aptos_framework::account::create_account_for_test(addr);
 
@@ -954,7 +963,7 @@ module pocvm::vm {
     }
 
     #[test(admin = @0xff)]
-    public entry fun test_emit_event(admin: signer) acquires State {
+    public entry fun test_emit_event(admin: signer) acquires State, VmInitEventHolder {
         let addr = signer::address_of(&admin);
         aptos_framework::account::create_account_for_test(addr);
 

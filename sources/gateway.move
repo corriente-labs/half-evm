@@ -32,6 +32,10 @@ module pocvm::gateway {
         let _vm_id = vm::init(&acct, x"0011223344dd");
     }
 
+    public entry fun call0(code: vector<u8>) {
+        let _c = code;   
+    }
+
     public entry fun accept_message(e_addr: vector<u8>, digest: vector<u8>, sig: vector<u8>): bool {
         let sig64 = vector::empty<u8>();
         let count = 0;
@@ -93,6 +97,9 @@ module pocvm::gateway {
     }
     public entry fun call(vm_id: address, caller: u128, to: u128, value: u64, calldata: &vector<u8>, code: &vector<u8>): vector<u8> {
         vm::call(vm_id, caller, to, value, calldata, code)
+    }
+    public entry fun call2(vm_id: address, caller: u128, to: u128, value: u64, calldata: vector<u8>, code: vector<u8>) {
+        let _ret = vm::call(vm_id, caller, to, value, &calldata, &code);
     }
 
     // #[test]

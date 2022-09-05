@@ -31,7 +31,30 @@ aptos move run --function-id 0x9d1b0093292f53747d0592a4fb67f75ac71c148b2659e42c5
 ```
 
 ## call
-TODO
+Not Allowed
 ```
 aptos move run --function-id 0x9d1b0093292f53747d0592a4fb67f75ac71c148b2659e42c574fd82262f0702b::gateway::call --type-args signer hex --args hex:0011223344
 ```
+
+## call0
+To test hex argument
+```
+aptos move run --function-id 0x9d1b0093292f53747d0592a4fb67f75ac71c148b2659e42c574fd82262f0702b::gateway::call0 --args hex:0011223344
+```
+
+## call2
+```rs
+fun call2(vm_id: address, caller: u128, to: u128, value: u64, calldata: vector<u8>, code: vector<u8>)
+```
+
+### test_arith
+```
+aptos move run --function-id 0x9d1b0093292f53747d0592a4fb67f75ac71c148b2659e42c574fd82262f0702b::gateway::call2 --args address:0x50c4155a6b749c6e17753f67898fbb1a8adba66683ccea38e38c872023f5d13d u128:49152 u128:49153 u64:1000 hex:00 hex:600161000201336000526000510160005260106000f3
+```
+https://explorer.devnet.aptos.dev/txn/64170130
+
+### test_calldata
+```
+aptos move run --function-id 0x9d1b0093292f53747d0592a4fb67f75ac71c148b2659e42c574fd82262f0702b::gateway::call2 --args address:0x50c4155a6b749c6e17753f67898fbb1a8adba66683ccea38e38c872023f5d13d u128:49152 u128:49153 u64:1000 hex:00000000000000000000000000000001 hex:600035601060006000376000510161000101336000526000516000556000540160015560015460015260106001f3
+```
+https://explorer.devnet.aptos.dev/txn/64184736
