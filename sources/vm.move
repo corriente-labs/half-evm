@@ -263,15 +263,7 @@ module pocvm::vm {
             if (op >= 0x90 && op <= 0x9f) {
                 let length = vector::length(stack);
                 let index = length - 1 - ((op as u64) - 0x90);
-                let top_val = *vector::borrow<u128>(stack, length - 1);
-                let target_val = *vector::borrow<u128>(stack, index);
-
-                let top = vector::borrow_mut<u128>(stack, length - 1);
-                *top = target_val;
-
-                let target = vector::borrow_mut<u128>(stack, index);
-                *target = top_val;
-
+                vector::swap(stack, index, length - 1);
                 pc = pc + 1;
                 continue
             };
