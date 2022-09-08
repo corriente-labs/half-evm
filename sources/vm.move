@@ -249,6 +249,33 @@ module pocvm::vm {
                 continue
             };
 
+            // dup-n
+            if (op >= 0x80 && op <= 0x8f) {
+                let length = vector::length(stack);
+                let index = length - 1 - ((op as u64) - 0x80);
+                let value = vector::borrow<u128>(stack, index);
+                vector::push_back<u128>(stack, *value);
+                pc = pc + 1;
+                continue
+            };
+
+            // swap-n
+            if (op >= 0x90 && op <= 0x9f) {
+                let length = vector::length(stack);
+                let index = length - 1 - ((op as u64) - 0x90);
+                let top_val = *vector::borrow<u128>(stack, length - 1);
+                let target_val = *vector::borrow<u128>(stack, index);
+
+                let top = vector::borrow_mut<u128>(stack, length - 1);
+                *top = target_val;
+
+                let target = vector::borrow_mut<u128>(stack, index);
+                *target = top_val;
+
+                pc = pc + 1;
+                continue
+            };
+
             // caller
             if (op == 0x33) {
                 vector::push_back(stack, caller_addr);
