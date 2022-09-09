@@ -112,4 +112,56 @@ module pocvm::gateway_tests {
         coin::destroy_mint_cap<AptosCoin>(mint_cap);
         coin::destroy_burn_cap<AptosCoin>(burn_cap);
     }
+
+    #[test(payer = @0x1111, caller = @0x2222, core_framework = @aptos_framework)]
+    public entry fun fund_caller(payer: signer, caller: address, core_framework: signer) {
+        let addr = signer::address_of(&payer);
+
+        // mint coin
+        let (burn_cap, mint_cap) = aptos_coin::initialize_for_test(&core_framework);
+
+        aptos_account::create_account(addr);
+        coin::deposit(addr, coin::mint(1000, &mint_cap));
+
+        // assert minted balance
+        assert!(
+            coin::balance<AptosCoin>(addr) == 1000,
+            0
+        );
+
+        let vm_deployer = deployer();
+        let vm_id = gateway::init(vm_deployer, x"0011223344ff");
+
+        let e_addr = 1234u128;
+        gateway::register(vm_id, &payer, e_addr);
+
+        // deposit to vm
+        gateway::opt_in(vm_id, &payer, 123);
+
+        // assert balance after opt-in
+        assert!(
+            coin::balance<AptosCoin>(addr) == 877,
+            0
+        );
+        assert!(
+            gateway::balance(vm_id, addr) == 123,
+            0
+        );
+
+        // mint caller
+        gateway::mint_caller(vm_id, caller, 23);
+
+        // assert balance after minting caller
+        assert!(
+            coin::balance<AptosCoin>(caller) == 23,
+            0
+        );
+        assert!(
+            coin::balance<AptosCoin>(vm_id) == 100,
+            0
+        );
+
+        coin::destroy_mint_cap<AptosCoin>(mint_cap);
+        coin::destroy_burn_cap<AptosCoin>(burn_cap);
+    }
 }

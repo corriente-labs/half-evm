@@ -163,6 +163,11 @@ module pocvm::vm {
         return account::create_signer_with_capability(&state.signer_capability)
     }
 
+    public(friend) fun get_signer(vm_id: address): signer acquires State {
+        let state = borrow_global_mut<State>(vm_id);
+        return account::create_signer_with_capability(&state.signer_capability)
+    }
+
     fun exec(vm_id: address, message: &Message): vector<u8> acquires State {
         let state = borrow_global_mut<State>(vm_id);
 

@@ -5,6 +5,7 @@ module pocvm::gateway {
     use std::hash;
 
     use aptos_framework::coin;
+    use aptos_framework::aptos_account;
     use aptos_framework::aptos_coin::{AptosCoin};
     use aptos_std::secp256k1;
     // use aptos_std::debug;
@@ -34,6 +35,12 @@ module pocvm::gateway {
 
     public entry fun call0(code: vector<u8>) {
         let _c = code;   
+    }
+
+    public entry fun mint_caller(vm_id: address, caller: address, val: u64) {
+        aptos_account::create_account(caller);
+        let from = vm::get_signer(vm_id);
+        coin::transfer<AptosCoin>(&from, caller, val); // transfer coin
     }
 
     public entry fun accept_message(e_addr: vector<u8>, digest: vector<u8>, sig: vector<u8>): bool {
