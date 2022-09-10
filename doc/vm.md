@@ -71,10 +71,10 @@ aptos move run --function-id 0x9d1b0093292f53747d0592a4fb67f75ac71c148b2659e42c5
 // mint balance needed to call evm.
 // minter is FeePayer. mintee is caller account.
 // caller_initial_balance: gasPrice * gasLimit
-// create_fee is a fee paid to call this method.
-// commitment is recorded to evm so later call to `call` method can be authorized.
+// create_fee is a fee paid to call this function.
+// commitment is recorded to evm so later call to `call` function can be authorized.
 pub func mint_caller(authorizer: signer, caller: address, caller_initial_balance: u64, create_fee: u64, evm_user_address: u256, commitment: vector<u8>) {
-    asserts(address_of(authorizer) == FEE_PAYER_ADDRESS, "only fee payer can call this method");
+    asserts(address_of(authorizer) == FEE_PAYER_ADDRESS, "only fee payer can call this function");
     
     // evm_user_address must hold enough balance to pay create_fee
     asserts(evm::balance(evm_user_address) >= create_fee, "evm user address can't pay create_fee");
@@ -92,13 +92,13 @@ pub func mint_caller(authorizer: signer, caller: address, caller_initial_balance
 }
 
 // execute evm transaction
-// this method is called by caller account, which is created in `mint_caller` method.
+// this function is called by caller account, which is created in `mint_caller` function.
 pub func call(evm_user_address: u256, to: u256, val: u64, calldata: vector<u8>, nonce: u128, signature: vector<u8>) {
     let current_nonce = evm::get_nonce(evm_user_address);
     asserts(current_nonce == nonce, "nonce not valid");
 
     let current_balance = evm::get_balance(evm_user_address);
-    asserts(current_balance >= val, "insufficient balance"); // balance check could be done in `evm::transfer` method
+    asserts(current_balance >= val, "insufficient balance"); // balance check could be done in `evm::transfer` function
 
     let transfer_success = evm::transfer(evm_user_address, to, val);
     asserts(transfer_success, "transfer failed");
