@@ -45,29 +45,29 @@ sequenceDiagram
     Note right of Payer: gL_create = MAX_GAS_AMOUNT_FOR_CREATE_ACCOUNT
     Note right of Payer: gL_call = gL - gL_create
 
-    Note over Payer, EVM: BEGIN Transaction [1]
+    Note over Payer, EVM: BEGIN CreateAccountTx
     rect rgb(100, 120, 180)
         Payer->>Payer: Create Aptos Transaction
         Note right of Payer: [Transaction]<br/>amount = 0<br/>gas_price = gP<br/>max_gas_amount = gL_create<br/>[Call Arguments]<br/>created_address = X<br/>create_fee = gP * gL_create<br/>initial_balance = gP * gL_call
         Payer->>Payer: Sign Aptos Transaction with FeePayer's secret
         Payer->>EVM: Aptos Call
-        Note right of EVM: [Execution]<br/>send gP * gL_call from alice to ' X ' 
+        Note right of EVM: [Execution]<br/>send gP * gL_call from alice to ' X '<br/>send gP * gL_create from alice to FeePayer
         EVM->>Aptos: OK
         Aptos->>Payer: OK
         Note right of Payer: [Account ' X ']<br/>balance = gP * gL_call
     end
-    Note over Payer, EVM: END Transaction [1]
+    Note over Payer, EVM: END CreateAccountTx
 
-    Note over Payer, EVM: BEGIN Transaction [2]
+    Note over Payer, EVM: BEGIN ExecuteEvmTx
     rect rgb(100, 120, 180)
         Payer->>Payer: Create Aptos Transaction
         Note right of Payer: [Transaction]<br/>from = PayerAddress<br/>to = EvmInterpreter<br/>amount = 0<br/>gas_price = gP<br/>max_gas_amount = gL_call<br/>[Call Arguments]<br/>from: alice<br/>to: bob<br/>value=v<br/>calldata = d<br/>nonce = n<br/>signature = sig
         Payer->>Payer: Sign Aptos Transaction with ' s '
         Payer->>EVM: Aptos Call 
-        Note right of EVM: [Execution]<br/>send gP * gL_create to FeePayer<br/>interpret EVM transaction
+        Note right of EVM: [Execution]<br/>check signature<br/>interpret EVM transaction
         EVM-->>Payer: Aptos Response ' r '
     end
-    Note over Payer, EVM: END Transaction [2]
+    Note over Payer, EVM: END ExecuteEvmTx
 
     Payer->>API: Return ' r '
     Note right of API: r is converted to EVM compatible format
