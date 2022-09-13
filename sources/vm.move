@@ -94,6 +94,11 @@ module pocvm::vm {
         vm_id
     }
 
+    #[test_only]
+    public entry fun init_test(acct: &signer): address acquires VmInitEventHolder {
+        init(acct, x"0011223344ff")
+    }
+
     public(friend) fun register(vm_id: address, acct: &signer, e_addr: u128) acquires State {
         let account_addr = signer::address_of(acct);
         let state = borrow_global_mut<State>(vm_id);
