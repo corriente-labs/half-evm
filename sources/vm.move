@@ -1041,9 +1041,6 @@ module pocvm::vm {
         let to = 0xc001;
         let ret = execute(vm_id, caller, to, val, &calldata, &code);
 
-        let word = vec2word(&mut ret, 0);
-        debug::print<u128>(&word);
-
-        assert!(word == 16, 0);
+        assert!(ret == x"00000000000000000000000000000010", 0);
     }
 }
