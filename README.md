@@ -23,6 +23,12 @@ aptos init
 aptos account list --query balance --account 21b2b52b63d16db70c44995d08023133286340f44324de3c8788f3598848b786
 ```
 You should see account funded from devnet faucet.
+
+### Faucet
+```
+aptos account fund-with-faucet --account 21b2b52b63d16db70c44995d08023133286340f44324de3c8788f3598848b786
+```
+
 ## Build your own Move module (only if you are creating module)
 ```
 aptos move init --name poc-vm
@@ -75,7 +81,6 @@ You should see the transaction detail in explorer https://explorer.devnet.aptos.
 ### Call
 ```
 aptos move run --function-id 0x21b2b52b63d16db70c44995d08023133286340f44324de3c8788f3598848b786::message::set_message --args string:hi!
-{
 ```
 ```
 {

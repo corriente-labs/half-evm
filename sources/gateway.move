@@ -5,6 +5,7 @@ module pocvm::gateway {
     use std::hash;
 
     use aptos_framework::coin;
+    use aptos_framework::aptos_account;
     use aptos_framework::aptos_coin::{AptosCoin};
     use aptos_std::secp256k1;
     // use aptos_std::debug;
@@ -21,6 +22,25 @@ module pocvm::gateway {
     public entry fun init(acct: signer, seed: vector<u8>): address {
         let vm_id = vm::init(&acct, seed);
         vm_id
+    }
+
+    public entry fun init2(acct: signer): address {
+        let vm_id = vm::init(&acct, x"0011223344dd");
+        vm_id
+    }
+
+    public entry fun init3(acct: signer) {
+        let _vm_id = vm::init(&acct, x"0011223344dd");
+    }
+
+    public entry fun call0(code: vector<u8>) {
+        let _c = code;   
+    }
+
+    public entry fun mint_caller(vm_id: address, caller: address, val: u64) {
+        aptos_account::create_account(caller);
+        let from = vm::get_signer(vm_id);
+        coin::transfer<AptosCoin>(&from, caller, val); // transfer coin
     }
 
     public entry fun accept_message(e_addr: vector<u8>, digest: vector<u8>, sig: vector<u8>): bool {
@@ -81,6 +101,12 @@ module pocvm::gateway {
         let addr = signer::address_of(to); // address opting-out
         let from = vm::opt_out(vm_id, addr, val);
         coin::transfer<AptosCoin>(&from, addr, val); // transfer coin
+    }
+    public entry fun call(vm_id: address, caller: u128, to: u128, value: u64, calldata: &vector<u8>, code: &vector<u8>): vector<u8> {
+        vm::call(vm_id, caller, to, value, calldata, code)
+    }
+    public entry fun call2(vm_id: address, caller: u128, to: u128, value: u64, calldata: vector<u8>, code: vector<u8>) {
+        let _ret = vm::call(vm_id, caller, to, value, &calldata, &code);
     }
 
     // #[test]

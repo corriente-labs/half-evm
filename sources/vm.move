@@ -8,6 +8,8 @@ module pocvm::vm {
     use aptos_framework::aptos_coin::{AptosCoin};
     use aptos_std::table::{Self, Table};
     use aptos_std::event;
+
+    #[test_only]
     use aptos_std::debug;
 
     friend pocvm::gateway;
@@ -17,6 +19,7 @@ module pocvm::vm {
 
     const STATE_ALREADY_EXISTS: u64 = 0;
     const ACCOUNT_ALREADY_EXISTS: u64 = 1;
+    const INIT_EVENT_HOLDER_ALREADY_EXISTS: u64 = 0;
 
     const ACCOUNT_NOT_FOUND: u64 = 2;
     const INSUFFICIENT_BALANCE: u64 = 3;
@@ -47,15 +50,24 @@ module pocvm::vm {
         nonce: u128,
     }
 
+    struct VmInitEventHolder has key {
+        events: event::EventHandle<VmInitEvent>,
+    }
+
+    struct VmInitEvent has drop, store {
+        vm_id: address,
+    }
+
     struct EvmEvent has drop, store {
         data: vector<u8>,
         topics: vector<u128>,
     }
 
     // init resource account and vm state
-    public(friend) fun init(acct: &signer, seed: vector<u8>): address {
+    public(friend) fun init(acct: &signer, seed: vector<u8>): address acquires VmInitEventHolder {
         let account_addr = signer::address_of(acct);
         assert!(!exists<State>(account_addr), error::already_exists(STATE_ALREADY_EXISTS));
+        assert!(!exists<VmInitEventHolder>(account_addr), error::already_exists(INIT_EVENT_HOLDER_ALREADY_EXISTS));
 
         let (resource_signer, resource_signer_cap) = account::create_resource_account(acct, seed);
         coin::register<AptosCoin>(&resource_signer);
@@ -68,7 +80,23 @@ module pocvm::vm {
         });
 
         let vm_id = signer::address_of(&resource_signer);
+
+        move_to<VmInitEventHolder>(&resource_signer, VmInitEventHolder {
+            events: account::new_event_handle<VmInitEvent>(&resource_signer),
+        });
+
+        let holder = borrow_global_mut<VmInitEventHolder>(vm_id);
+
+        event::emit_event(&mut holder.events, VmInitEvent {
+            vm_id: vm_id,
+        });
+
         vm_id
+    }
+
+    #[test_only]
+    public entry fun init_test(acct: &signer): address acquires VmInitEventHolder {
+        init(acct, x"0011223344ff")
     }
 
     public(friend) fun register(vm_id: address, acct: &signer, e_addr: u128) acquires State {
@@ -140,6 +168,11 @@ module pocvm::vm {
         return account::create_signer_with_capability(&state.signer_capability)
     }
 
+    public(friend) fun get_signer(vm_id: address): signer acquires State {
+        let state = borrow_global_mut<State>(vm_id);
+        return account::create_signer_with_capability(&state.signer_capability)
+    }
+
     fun exec(vm_id: address, message: &Message): vector<u8> acquires State {
         let state = borrow_global_mut<State>(vm_id);
 
@@ -160,6 +193,51 @@ module pocvm::vm {
             &message.data, &mut stack, &mut memory, &mut ret_data,
             &mut depth
         )
+    }
+
+    public(friend) fun call(vm_id: address, caller: u128, to: u128, value: u64, calldata: &vector<u8>, code: &vector<u8>): vector<u8> acquires State {
+        let state = borrow_global_mut<State>(vm_id);
+        let accounts = &mut state.accounts;
+
+        if(!table::contains(accounts, caller)) {
+            table::add(accounts, caller, Account {
+                balance: 100000000000000, // mint enough balance
+                storage: table::new<u128, u128>(),
+                code: vector::empty(),
+                nonce: 0,
+            });
+        };
+
+        if(!table::contains(accounts, to)) {
+            table::add(accounts, to, Account {
+                balance: value,
+                storage: table::new<u128, u128>(),
+                code: *code,
+                nonce: 0,
+            });
+        };
+
+        let caller_acct = table::borrow_mut(accounts, caller);
+        caller_acct.balance = caller_acct.balance - value;
+
+        let stack = vector::empty<u128>();
+        let memory = vector::empty<u8>();
+        let ret_data = vector::empty<u8>(); // TODO: implement correctly
+        let depth = 0;
+
+        let ret = run(state,
+            caller, to,
+            code,
+            calldata, &mut stack, &mut memory, &mut ret_data,
+            &mut depth
+        );
+
+        event::emit_event(&mut state.events, EvmEvent{
+            data: ret,
+            topics: vector::empty<u128>(),
+        });
+
+        return ret
     }
 
     fun run(
@@ -667,7 +745,7 @@ module pocvm::vm {
     }
 
     #[test(admin = @0xff)]
-    public entry fun test_arith(admin: signer) acquires State {
+    public entry fun test_arith(admin: signer) acquires State, VmInitEventHolder {
         let addr = signer::address_of(&admin);
         aptos_framework::account::create_account_for_test(addr);
 
@@ -706,86 +784,7 @@ module pocvm::vm {
     }
 
     #[test(admin = @0xff)]
-    public entry fun test_memory(admin: signer) acquires State {
-        let addr = signer::address_of(&admin);
-        aptos_framework::account::create_account_for_test(addr);
-
-        let vm_id = init(&admin, x"0011223344ff");
-
-        // let contract_addr: u128 = 0x2000;
-        let val = 1000;
-
-        /*
-        push1 01
-        push1 00
-        mstore      ; 0x52
-        msize       ; 0x59
-        // 16
-
-        push1 02
-        push1 0x10  ; 16
-        mstore
-        msize
-        // 32
-        add
-
-        push1 03
-        push1 0x20  ; 32
-        mstore
-        msize
-        // 48
-        add
-
-        push1 0x10
-        push1 0xf0  ; 240
-        mstore
-        msize
-        // 256
-        add
-
-        push1 0x00
-        mload
-        //  0x01
-
-        push1 0x10
-        mload
-        //  0x02
-
-        push1 0x20
-        mload
-        //  0x03
-
-        push1 0xf0
-        mload
-        //  0x10
-
-        add
-        add
-        add
-        add
-
-        push1 0x00
-        mstore
-
-        push1 0x10
-        push1 0x00
-        return
-        */
-        let code = x"6001600052596002601052590160036020525901601060f052590160005160105160205160f0510101010160005260106000f3";
-        
-        let calldata = x"";
-        let caller = 0xc000;
-        let to = 0xc001;
-        let ret = execute(vm_id, caller, to, val, &calldata, &code);
-
-        let word = vec2word(&mut ret, 0);
-        debug::print<u128>(&word);
-
-        assert!(word == 16 + 32 + 48 + 256 + 1 + 2 + 3 + 16, 0);
-    }
-
-    #[test(admin = @0xff)]
-    public entry fun test_storage(admin: signer) acquires State {
+    public entry fun test_storage(admin: signer) acquires State, VmInitEventHolder {
         let addr = signer::address_of(&admin);
         aptos_framework::account::create_account_for_test(addr);
 
@@ -837,7 +836,7 @@ module pocvm::vm {
     }
 
     #[test(admin = @0xff)]
-    public entry fun test_calldata(admin: signer) acquires State {
+    public entry fun test_calldata(admin: signer) acquires State, VmInitEventHolder {
         let addr = signer::address_of(&admin);
         aptos_framework::account::create_account_for_test(addr);
 
@@ -900,7 +899,7 @@ module pocvm::vm {
     }
 
     #[test(admin = @0xff)]
-    public entry fun test_call(admin: signer) acquires State {
+    public entry fun test_call(admin: signer) acquires State, VmInitEventHolder {
         let addr = signer::address_of(&admin);
         aptos_framework::account::create_account_for_test(addr);
 
@@ -993,7 +992,7 @@ module pocvm::vm {
     }
 
     #[test(admin = @0xff)]
-    public entry fun test_emit_event(admin: signer) acquires State {
+    public entry fun test_emit_event(admin: signer) acquires State, VmInitEventHolder {
         let addr = signer::address_of(&admin);
         aptos_framework::account::create_account_for_test(addr);
 
@@ -1025,5 +1024,28 @@ module pocvm::vm {
         let state = borrow_global<State>(vm_id);
         let count = event::counter<EvmEvent>(&state.events);
         assert!(count == 1, 0);
+    }
+
+    #[test(admin = @0xff)]
+    public entry fun test_many_sstore(admin: signer) acquires State, VmInitEventHolder {
+        let addr = signer::address_of(&admin);
+        aptos_framework::account::create_account_for_test(addr);
+
+        let vm_id = init(&admin, x"0011223344ff");
+
+        let state = borrow_global<State>(vm_id);
+        let count = event::counter<EvmEvent>(&state.events);
+        assert!(count == 0, 0);
+
+        // let contract_addr: u128 = 0x2000;
+        let val = 1000;
+        let code = x"6f000000000000000000000000000000016f00000000000000000000000000000000556f000000000000000000000000000000016f00000000000000000000000000000001556f000000000000000000000000000000016f00000000000000000000000000000002556f000000000000000000000000000000016f00000000000000000000000000000003556f000000000000000000000000000000016f00000000000000000000000000000004556f000000000000000000000000000000016f00000000000000000000000000000005556f000000000000000000000000000000016f00000000000000000000000000000006556f000000000000000000000000000000016f00000000000000000000000000000007556f000000000000000000000000000000016f00000000000000000000000000000008556f000000000000000000000000000000016f00000000000000000000000000000009556f000000000000000000000000000000016f0000000000000000000000000000000a556f000000000000000000000000000000016f0000000000000000000000000000000b556f000000000000000000000000000000016f0000000000000000000000000000000c556f000000000000000000000000000000016f0000000000000000000000000000000d556f000000000000000000000000000000016f0000000000000000000000000000000e556f000000000000000000000000000000016f0000000000000000000000000000000f556f00000000000000000000000000000000546f00000000000000000000000000000001546f00000000000000000000000000000002546f00000000000000000000000000000003546f00000000000000000000000000000004546f00000000000000000000000000000005546f00000000000000000000000000000006546f00000000000000000000000000000007546f00000000000000000000000000000008546f00000000000000000000000000000009546f0000000000000000000000000000000a546f0000000000000000000000000000000b546f0000000000000000000000000000000c546f0000000000000000000000000000000d546f0000000000000000000000000000000e546f0000000000000000000000000000000f5401010101010101010101010101010160005260106000f3";
+        
+        let calldata = x"";
+        let caller = 0xc000;
+        let to = 0xc001;
+        let ret = execute(vm_id, caller, to, val, &calldata, &code);
+
+        assert!(ret == x"00000000000000000000000000000010", 0);
     }
 }
